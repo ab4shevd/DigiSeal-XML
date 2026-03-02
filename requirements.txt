@@ -1,0 +1,5 @@
+PyQt5 >= 5.15.0
+lxml>=4.9.0
+pywin32>=305
+loguru>=0.7.0
+python-dotenv>=1.0.0
