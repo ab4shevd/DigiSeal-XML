@@ -14,10 +14,10 @@ class SignWorker(QObject):
     finished = pyqtSignal(bool, str)
     progress = pyqtSignal(int, str)
 
-    def __init__(self, file_paths, thumbprint):
+    def __init__(self, file_paths, signer_data):  # signer_data = (thumbprint, cert_obj)
         super().__init__()
         self.file_paths = file_paths
-        self.thumbprint = thumbprint
+        self.thumbprint, self.cert_obj = signer_data
         self.signer = CryptoSigner()
         self.signer.progress_updated.connect(self.progress)
 
@@ -26,7 +26,7 @@ class SignWorker(QObject):
             for i, file_path in enumerate(self.file_paths):
                 self.progress.emit(i * 100 // len(self.file_paths),
                                    f"Подпись файла {i+1} из {len(self.file_paths)}")
-                success = self.signer.sign_xml(file_path, self.thumbprint)
+                success = self.signer.sign_xml(file_path, cert_thumbprint=self.thumbprint, cert_obj=self.cert_obj)
                 if not success:
                     self.finished.emit(False, f"Ошибка при подписи {file_path}")
                     return
@@ -163,7 +163,7 @@ class MainWindow(QMainWindow):
         if not indexes:
             return
         index = indexes[0]
-        thumbprint = self.people_model.get_thumbprint(index.row())
+        signer_data = self.people_model.get_signer_data(index.row())
 
         # Блокируем интерфейс
         self.sign_btn.setEnabled(False)
@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
 
         # Создаём поток
         self.thread = QThread()
-        self.worker = SignWorker(selected_files, thumbprint)
+        self.worker = SignWorker(selected_files, signer_data)
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)

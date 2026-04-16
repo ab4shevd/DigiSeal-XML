@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
                              QListWidgetItem, QPushButton, QLabel, QLineEdit,
-                             QMessageBox, QDialogButtonBox, QAbstractItemView)
+                             QMessageBox, QDialogButtonBox, QAbstractItemView, QFileDialog, QInputDialog)
 from PyQt5.QtCore import Qt
 
 from crypto.signer import CryptoSigner
@@ -22,10 +22,17 @@ class PeopleDialog(QDialog):
         self.cert_list.setSelectionMode(QAbstractItemView.SingleSelection)
         layout.addWidget(self.cert_list)
 
-        # Кнопка обновить список сертификатов
+        # Кнопки: обновить список и импорт PFX
+        btn_layout = QHBoxLayout()
         refresh_btn = QPushButton("🔄 Обновить список")
         refresh_btn.clicked.connect(self.load_certificates)
-        layout.addWidget(refresh_btn)
+        btn_layout.addWidget(refresh_btn)
+
+        import_pfx_btn = QPushButton("📁 Импорт из PFX")
+        import_pfx_btn.clicked.connect(self.import_pfx)
+        btn_layout.addWidget(import_pfx_btn)
+
+        layout.addLayout(btn_layout)
 
         # Поле для ввода имени
         name_layout = QHBoxLayout()
@@ -89,7 +96,7 @@ class PeopleDialog(QDialog):
             self.current_list.addItem(item)
 
     def add_person(self):
-        """Добавить выбранный сертификат как подписанта"""
+        """Добавить выбранный сертификат из хранилища как подписанта"""
         current = self.cert_list.currentItem()
         if not current:
             QMessageBox.warning(self, "Предупреждение", "Выберите сертификат из списка")
@@ -115,6 +122,33 @@ class PeopleDialog(QDialog):
         self.people_model.add_person(name, thumbprint)
         self.refresh_current_list()
         self.name_edit.clear()
+
+    def import_pfx(self):
+        """Импортировать сертификат из PFX-файла"""
+        pfx_path, _ = QFileDialog.getOpenFileName(self, "Выберите PFX-файл", "", "PFX файлы (*.pfx)")
+        if not pfx_path:
+            return
+        password, ok = QInputDialog.getText(self, "Пароль", "Введите пароль от PFX-файла:", QLineEdit.Password)
+        if not ok:
+            return
+
+        signer = CryptoSigner()
+        try:
+            cert = signer.load_cert_from_pfx(pfx_path, password)
+            thumbprint = cert.Thumbprint
+            subject = cert.GetInfo(1)  # простое имя
+            # Добавляем в модель
+            self.people_model.add_person(
+                name=subject,
+                thumbprint=thumbprint,
+                cert_type='pfx',
+                pfx_path=pfx_path,
+                pfx_password=password
+            )
+            self.refresh_current_list()
+            QMessageBox.information(self, "Успех", f"Сертификат '{subject}' добавлен.")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить сертификат:\n{e}")
 
     def remove_person(self):
         """Удалить выбранного подписанта из модели"""
